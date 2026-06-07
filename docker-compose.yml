@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: agent_sentinel
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d agent_sentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  neo4j:
+    image: neo4j:5-community
+    profiles: ["analytics"]
+    environment:
+      NEO4J_AUTH: REDACTED_NEO4J_AUTH
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    profiles: ["analytics"]
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: REDACTED_OPENSEARCH_PASSWORD
+    ports:
+      - "9200:9200"
+
+  backend:
+    build: ./backend
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+psycopg://sentinel:sentinel@postgres:5432/agent_sentinel
+      API_KEY_PEPPER: local-demo-change-me
+      ADMIN_API_KEY: local-demo-admin-key
+      ENABLE_DEMO_SEED: "true"
+      RATE_LIMIT_PER_MINUTE: "240"
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_BASE: http://localhost:8000/api/v1
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres-data:
