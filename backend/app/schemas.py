@@ -19,7 +19,7 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     """User login request."""
-    email: EmailStr
+    email: str = Field(min_length=1, max_length=255)  # plain str allows admin@admin
     password: str = Field(min_length=1, max_length=255)
 
 

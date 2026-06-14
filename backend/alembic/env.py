@@ -12,11 +12,16 @@ from sqlalchemy import engine_from_config
 from sqlalchemy.pool import StaticPool
 from alembic import context
 
-try:
-    from app.core.config import settings
-    DATABASE_URL = settings.DATABASE_URL
-except Exception:
-    DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost/agent_sentinel"
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        DATABASE_URL = settings.database_url
+    except Exception:
+        DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost/agent_sentinel"
 
 # this is the Alembic Config object, which provides
 # the values of the [alembic] section of the alembic.ini

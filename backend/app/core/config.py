@@ -19,6 +19,9 @@ class Settings:
     enable_demo_seed: bool = os.getenv("ENABLE_DEMO_SEED", "true").lower() == "true"
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "240"))
     fail_closed: bool = os.getenv("SENTINEL_FAIL_CLOSED", "true").lower() == "true"
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    oauth_redirect_uri: str = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:5173/auth/callback")
 
 
 @lru_cache

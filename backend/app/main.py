@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.api.auth import router as auth_router
+from app.api.google_auth import router as google_auth_router
 from app.core.config import get_settings
 from app.db.session import Base, SessionLocal, engine
 from app.services.seed import seed_demo_data
@@ -72,6 +73,7 @@ def startup() -> None:
 
 
 app.include_router(auth_router)
+app.include_router(google_auth_router)
 app.include_router(router, prefix=settings.api_prefix)
 
 

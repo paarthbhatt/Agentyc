@@ -92,7 +92,16 @@ def create_agent(payload: AgentCreate, x_admin_api_key: str | None = Header(defa
     require_admin_key(x_admin_api_key)
     api_key = generate_api_key()
     permissions = payload.permissions or default_permissions_for_role(payload.role)
+    # Ensure a default organization exists
+    from app.models import Organization
+    import uuid
+    org = db.query(Organization).filter(Organization.slug == "demo-org").one_or_none()
+    if not org:
+        org = Organization(name="Demo Organization", slug="demo-org", owner_id=uuid.uuid4())
+        db.add(org)
+        db.flush()
     agent = Agent(
+        org_id=org.id,
         name=payload.name,
         framework=payload.framework,
         owner=payload.owner,

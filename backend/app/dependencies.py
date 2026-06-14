@@ -2,7 +2,7 @@
 
 from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.auth.jwt_handler import verify_token
 from app.db.session import get_db
@@ -14,7 +14,7 @@ security = HTTPBearer()
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthCredentials, Depends(security)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """Get current user from JWT token."""

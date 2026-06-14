@@ -1,9 +1,11 @@
 from __future__ import annotations
+import uuid
 
 from sqlalchemy.orm import Session
 
+from app.auth.password import hash_password
 from app.core.security import generate_api_key, hash_api_key
-from app.models import Agent, AgentIdentity, BehaviorBaseline, Incident, RedTeamScenario, SandboxProfile, TelemetryEvent, ThreatIntelIndicator, Tool
+from app.models import Agent, AgentIdentity, BehaviorBaseline, Incident, OrganizationMember, RedTeamScenario, SandboxProfile, TelemetryEvent, ThreatIntelIndicator, Tool, Organization, User
 from app.services.identity import default_permissions_for_role
 
 
@@ -12,8 +14,16 @@ def _get_or_create_demo_agent(db: Session) -> Agent:
     if agent:
         return agent
 
+    # Ensure a default organization exists
+    org = db.query(Organization).filter(Organization.slug == "demo-org").one_or_none()
+    if not org:
+        org = Organization(name="Demo Organization", slug="demo-org", owner_id=uuid.uuid4())
+        db.add(org)
+        db.flush()
+
     demo_key = generate_api_key()
     agent = Agent(
+        org_id=org.id,
         name="Finance Analyst Agent",
         framework="LangGraph",
         owner="security-demo@agentsentinel.local",
@@ -105,6 +115,29 @@ def _seed_advanced_security(db: Session, agent: Agent) -> None:
 
 
 def seed_demo_data(db: Session) -> None:
+    # Ensure admin user exists for simple email/password login
+    admin_email = "admin@admin"
+    admin_password = "admin"
+    existing_admin = db.query(User).filter(User.email == admin_email).first()
+    if not existing_admin:
+        admin_user = User(
+            email=admin_email,
+            password_hash=hash_password(admin_password),
+            is_active=True,
+        )
+        db.add(admin_user)
+        db.flush()
+        # Assign admin user to a default organization
+        org = db.query(Organization).filter(Organization.slug == "admin-org").one_or_none()
+        if not org:
+            org = Organization(name="Admin Organization", slug="admin-org", owner_id=admin_user.id)
+            db.add(org)
+            db.flush()
+        # Add admin as organization member with owner role
+        member = OrganizationMember(org_id=org.id, user_id=admin_user.id, role="owner")
+        db.add(member)
+        db.commit()
+
     agent = _get_or_create_demo_agent(db)
     _seed_tools(db)
     _seed_attack_story(db, agent)
