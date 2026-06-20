@@ -1,11 +1,41 @@
+# --- Python ---
 __pycache__/
 *.py[cod]
 *.db
-.env
+*.sqlite
+*.sqlite3
 .venv/
-node_modules/
-dist/
-.DS_Store
+venv/
+env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.egg-info/
+build/
+htmlcov/
+.coverage
+.coverage.*
+*.cover
+
+# --- Environment files (never commit real secrets) ---
+.env
+.env.*
+!.env.example
+
+# --- Node / frontend ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Logs ---
+*.log

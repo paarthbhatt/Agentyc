@@ -8,7 +8,8 @@ services:
     image: neo4j:5-community
     profiles: ["analytics"]
     environment:
-      NEO4J_AUTH: REDACTED_NEO4J_AUTH
+      # Set NEO4J_AUTH in your .env (e.g. neo4j/<your-password>) before enabling this profile.
+      NEO4J_AUTH: ${NEO4J_AUTH:-neo4j/changeme}
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -19,24 +20,29 @@ services:
     environment:
       discovery.type: single-node
       plugins.security.disabled: "true"
-      OPENSEARCH_INITIAL_ADMIN_PASSWORD: REDACTED_OPENSEARCH_PASSWORD
+      # Set OPENSEARCH_INITIAL_ADMIN_PASSWORD in your .env before enabling this profile.
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-ChangeMeBeforeUse123!}
     ports:
-      - "9200:2000"
+      - "9200:9200"
 
   backend:
     build: ./backend
+    env_file: .env
     environment:
-      ENVIRONMENT: development
-      DATABASE_URL: sqlite:///./agent_sentinel.db
-      API_KEY_PEPPER: local-demo-change-me
-      ADMIN_API_KEY: local-demo-admin-key
-      ENABLE_DEMO_SEED: "true"
-      RATE_LIMIT_PER_MINUTE: "240"
-      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-      # Google OAuth placeholders (fill with real values)
-      GOOGLE_CLIENT_ID: "REDACTED_GOOGLE_CLIENT_ID"
-      GOOGLE_CLIENT_SECRET: "REDACTED_GOOGLE_CLIENT_SECRET"
-      OAUTH_REDIRECT_URI: http://localhost:5173/auth/callback
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./agent_sentinel.db}
+      # WARNING: these defaults are for local development only. Set real values
+      # in your .env (see .env.example) and rotate before any real deployment.
+      API_KEY_PEPPER: ${API_KEY_PEPPER:-local-demo-change-me}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-local-demo-admin-key}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      ENABLE_DEMO_SEED: ${ENABLE_DEMO_SEED:-true}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-240}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      # Google OAuth credentials MUST be supplied via .env (never committed).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-http://localhost:5173/auth/callback}
     ports:
       - "8000:8000"
 

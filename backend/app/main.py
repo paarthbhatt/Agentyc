@@ -4,6 +4,13 @@ import time
 import uuid
 from collections import defaultdict, deque
 
+from dotenv import load_dotenv
+
+# Load environment variables from a local .env (if present) BEFORE importing
+# modules that read settings. Previously python-dotenv was a dependency but was
+# never invoked, so .env was silently ignored when not injected by the launcher.
+load_dotenv()
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware

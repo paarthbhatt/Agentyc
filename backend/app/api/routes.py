@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -71,8 +72,20 @@ settings = get_settings()
 
 
 def require_admin_key(api_key: str | None) -> None:
-    if settings.admin_api_key and api_key != settings.admin_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing admin API key")
+    # Fail closed: if no admin key is configured on the server, the server is
+    # misconfigured and must never grant admin access. Previously this silently
+    # allowed every request through when ADMIN_API_KEY was unset.
+    configured = settings.admin_api_key
+    if not configured:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server is misconfigured: ADMIN_API_KEY is not set. Admin endpoints are disabled.",
+        )
+    if api_key is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing admin API key")
+    # Constant-time comparison to avoid timing side-channels.
+    if not secrets.compare_digest(api_key, configured):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin API key")
 
 
 def require_agent_key(agent: Agent, api_key: str | None) -> None:

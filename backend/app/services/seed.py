@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.auth.password import hash_password
+from app.core.config import get_settings
 from app.core.security import generate_api_key, hash_api_key
 from app.models import Agent, AgentIdentity, BehaviorBaseline, Incident, OrganizationMember, RedTeamScenario, SandboxProfile, TelemetryEvent, ThreatIntelIndicator, Tool, Organization, User
 from app.services.identity import default_permissions_for_role
@@ -115,7 +116,15 @@ def _seed_advanced_security(db: Session, agent: Agent) -> None:
 
 
 def seed_demo_data(db: Session) -> None:
-    # Ensure admin user exists for simple email/password login
+    # Ensure admin user exists for simple email/password login.
+    # SECURITY: the default admin@admin / admin credentials are for LOCAL
+    # DEVELOPMENT ONLY and must never be created in production.
+    settings = get_settings()
+    if settings.is_production:
+        raise RuntimeError(
+            "Refusing to seed demo data (including the default admin user) in production. "
+            "Set ENABLE_DEMO_SEED=false or run in a non-production ENVIRONMENT."
+        )
     admin_email = "admin@admin"
     admin_password = "admin"
     existing_admin = db.query(User).filter(User.email == admin_email).first()

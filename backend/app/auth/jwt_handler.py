@@ -1,11 +1,12 @@
 """JWT token generation and validation."""
 
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
 from pydantic import BaseModel
+
+from app.core.config import get_settings
 
 
 class TokenPayload(BaseModel):
@@ -25,9 +26,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+def _settings():
+    """Return the cached application settings (single source of truth for the JWT secret)."""
+    return get_settings()
 
 
 def create_access_token(
@@ -38,11 +39,12 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create access token."""
+    settings = _settings()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=settings.access_token_expire_minutes
         )
 
     payload = {
@@ -54,7 +56,7 @@ def create_access_token(
         "iat": datetime.now(timezone.utc),
     }
 
-    encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    encoded_jwt = jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
     return encoded_jwt
 
 
@@ -65,10 +67,11 @@ def create_refresh_token(
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create refresh token."""
+    settings = _settings()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
 
     payload = {
         "user_id": user_id,
@@ -79,14 +82,15 @@ def create_refresh_token(
         "iat": datetime.now(timezone.utc),
     }
 
-    encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    encoded_jwt = jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
     return encoded_jwt
 
 
 def verify_token(token: str) -> Optional[TokenPayload]:
     """Verify and decode token."""
+    settings = _settings()
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
         return TokenPayload(**payload)
     except jwt.ExpiredSignatureError:
         return None
@@ -96,8 +100,9 @@ def verify_token(token: str) -> Optional[TokenPayload]:
 
 def decode_refresh_token(token: str) -> Optional[dict]:
     """Decode refresh token."""
+    settings = _settings()
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
         if payload.get("type") != "refresh":
             return None
         return payload
