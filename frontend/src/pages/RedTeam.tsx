@@ -31,7 +31,7 @@ export default function RedTeam({ scenarios }: { scenarios: RedTeamScenario[] })
                 {/* Attack flow diagram */}
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-dim)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Attack Steps</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap', gap: '8px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 0' }}>
                     {sc.attack_steps.map((step, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
                         <div style={{
