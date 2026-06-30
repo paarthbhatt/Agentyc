@@ -74,6 +74,18 @@ class APIKeyRead(BaseModel):
     expires_at: datetime | None
 
 
+class AuditLogRead(BaseModel):
+    id: UUID
+    user_id: UUID | None
+    action: str
+    resource_type: str
+    resource_id: str
+    details: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AuthTokenResponse(BaseModel):
     """Auth token response."""
     access_token: str
@@ -108,7 +120,7 @@ class AgentRead(BaseModel):
 
 class AgentCreateResponse(BaseModel):
     agent: AgentRead
-    api_key: str
+    api_key: str | None = None
 
 
 class IdentityUpsert(BaseModel):
@@ -402,3 +414,21 @@ class RedTeamScenarioRead(BaseModel):
     severity: str
     status: str
     created_at: datetime
+
+
+class PolicyPackCreate(BaseModel):
+    name: str
+    description: str = ""
+    intent_match_threshold: int = Field(default=70, ge=0, le=100)
+    tool_trust_threshold: int = Field(default=50, ge=0, le=100)
+    memory_trust_threshold: int = Field(default=60, ge=0, le=100)
+    enforcement_mode: str = "audit"
+    is_active: bool = True
+
+
+class PolicyPackRead(PolicyPackCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    created_at: datetime
+    updated_at: datetime

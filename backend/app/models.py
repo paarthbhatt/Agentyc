@@ -113,6 +113,7 @@ class Agent(Base):
     risk_score: Mapped[int] = mapped_column(Integer, default=20)
     trust_level: Mapped[int] = mapped_column(Integer, default=70)
     api_key_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    grace_period_api_key_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -142,6 +143,7 @@ class Tool(Base):
     __tablename__ = "tools"
 
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("organizations.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
     type: Mapped[str] = mapped_column(String(60), default="api")
     endpoint: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -160,6 +162,7 @@ class TelemetryEvent(Base):
     __tablename__ = "telemetry_events"
 
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("organizations.id"), nullable=False, index=True)
     agent_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("agents.id"), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(120), index=True)
     event_type: Mapped[str] = mapped_column(String(80), index=True)
@@ -176,6 +179,7 @@ class Incident(Base):
     __tablename__ = "incidents"
 
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("organizations.id"), nullable=False, index=True)
     agent_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("agents.id"), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(120), index=True)
     title: Mapped[str] = mapped_column(String(240), nullable=False)
@@ -195,6 +199,7 @@ class MemoryObject(Base):
     __tablename__ = "memory_objects"
 
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("organizations.id"), nullable=False, index=True)
     agent_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("agents.id"), nullable=False, index=True)
     source: Mapped[str] = mapped_column(String(160), default="unknown")
     content_hash: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -311,3 +316,36 @@ class MCPAssessment(Base):
     verdict: Mapped[str] = mapped_column(String(40), default="approved")
     findings: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PolicyPack(Base):
+    __tablename__ = "policy_packs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("organizations.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    intent_match_threshold: Mapped[int] = mapped_column(Integer, default=70)
+    tool_trust_threshold: Mapped[int] = mapped_column(Integer, default=50)
+    memory_trust_threshold: Mapped[int] = mapped_column(Integer, default=60)
+    enforcement_mode: Mapped[str] = mapped_column(String(40), default="audit") # audit, block
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("users.id"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(160), index=True)
+    resource_type: Mapped[str] = mapped_column(String(80), index=True)
+    resource_id: Mapped[str] = mapped_column(String(160), index=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    user: Mapped[User] = relationship()
+
+
