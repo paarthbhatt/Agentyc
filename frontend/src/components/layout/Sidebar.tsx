@@ -1,103 +1,132 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from "../../context/AuthContext";
+import { useLocation, NavLink } from "react-router-dom";
 
 export type SectionId =
-  | 'overview' | 'agents' | 'incidents' | 'replay'
-  | 'graph' | 'memory' | 'tools' | 'policies'
-  | 'threats' | 'mcp' | 'redteam' | 'sandbox';
+  | "overview"
+  | "agents"
+  | "agent-detail"
+  | "incidents"
+  | "replay"
+  | "graph"
+  | "memory"
+  | "tools"
+  | "policies"
+  | "threats"
+  | "mcp"
+  | "redteam"
+  | "sandbox"
+  | "audit-logs";
 
 interface NavItem {
   id: SectionId;
   label: string;
   icon: string;
-  accent: string;
   badge?: number;
-  group: string;
+  href: string;
 }
 
-const NAV: NavItem[] = [
-  { id: 'overview',  label: 'Overview',        icon: '⬡', accent: '#00d4ff', group: 'COMMAND' },
-  { id: 'agents',    label: 'Agents',           icon: '◈', accent: '#00d4ff', group: 'COMMAND' },
-  { id: 'incidents', label: 'Incidents',        icon: '⚠', accent: '#ff3040', group: 'COMMAND' },
-  { id: 'replay',    label: 'Attack Replay',    icon: '▷', accent: '#ff3040', group: 'COMMAND' },
-  { id: 'graph',     label: 'Security Graph',   icon: '⬡', accent: '#a855f7', group: 'ANALYSIS' },
-  { id: 'memory',    label: 'Memory',           icon: '◉', accent: '#a855f7', group: 'ANALYSIS' },
-  { id: 'tools',     label: 'Tool Trust',       icon: '⚙', accent: '#ffb700', group: 'ANALYSIS' },
-  { id: 'threats',   label: 'Threat Intel',     icon: '⬛', accent: '#ff3040', group: 'INTEL' },
-  { id: 'mcp',       label: 'MCP Security',     icon: '⬢', accent: '#a855f7', group: 'INTEL' },
-  { id: 'redteam',   label: 'Red Team',         icon: '◎', accent: '#ff3040', group: 'INTEL' },
-  { id: 'policies',  label: 'Policies',         icon: '▣', accent: '#00ff88', group: 'CONTROL' },
-  { id: 'sandbox',   label: 'Sandbox',          icon: '⬜', accent: '#00ff88', group: 'CONTROL' },
+const NAV: { section: string; items: NavItem[] }[] = [
+  {
+    section: "Observability",
+    items: [
+      { id: "overview", label: "Dashboard", icon: "◈", href: "/" },
+      { id: "agents", label: "Agent Fleet", icon: "⬡", href: "/agents" },
+      { id: "incidents", label: "Incidents", icon: "⚠", href: "/incidents" },
+      { id: "replay", label: "Attack Replay", icon: "▶", href: "/replay" },
+    ],
+  },
+  {
+    section: "Intelligence",
+    items: [
+      { id: "graph", label: "Security Graph", icon: "⎈", href: "/graph" },
+      { id: "memory", label: "Memory Objects", icon: "≡", href: "/memory" },
+      { id: "tools", label: "Tool Trust", icon: "⚙", href: "/tools" },
+      { id: "threats", label: "Threat Intel", icon: "⚡", href: "/threats" },
+    ],
+  },
+  {
+    section: "Control",
+    items: [
+      { id: "policies", label: "Policies", icon: "🛡", href: "/policies" },
+      { id: "mcp", label: "MCP Security", icon: "⏣", href: "/mcp" },
+      { id: "sandbox", label: "Sandboxes", icon: "📦", href: "/sandbox" },
+      { id: "redteam", label: "Red Team", icon: "🎯", href: "/redteam" },
+      { id: "audit-logs", label: "Audit Logs", icon: "📝", href: "/audit-logs" },
+    ],
+  },
 ];
 
-const GROUPS = ['COMMAND', 'ANALYSIS', 'INTEL', 'CONTROL'];
-
 interface Props {
-  active: SectionId;
-  onNav: (id: SectionId) => void;
   incidentCount?: number;
 }
 
-export default function Sidebar({ active, onNav, incidentCount = 0 }: Props) {
+function isActive(item: NavItem, pathname: string): boolean {
+  if (item.href === "/") {
+    return pathname === "/";
+  }
+  return pathname.startsWith(item.href);
+}
+
+export default function Sidebar({ incidentCount = 0 }: Props) {
   const { user, org, logout } = useAuth();
-  const activeItem = NAV.find(n => n.id === active);
-  const accent = activeItem?.accent ?? '#00d4ff';
+  const location = useLocation();
+  const pathname = location.pathname;
 
   return (
-    <aside className="sidebar" style={{ '--nav-accent': accent } as React.CSSProperties}>
-      {/* Brand */}
+    <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="sidebar-logo">AS</div>
         <div className="sidebar-brand-text">
           <h1>Agent Sentinel</h1>
-          <p>ZERO TRUST RUNTIME</p>
+          <p>RUNTIME SECURITY</p>
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="sidebar-nav">
-        {GROUPS.map(group => (
-          <div key={group}>
-            <div className="nav-section-label">{group}</div>
-            {NAV.filter(n => n.group === group).map(item => (
-              <div
-                key={item.id}
-                className={`nav-item ${active === item.id ? 'active' : ''}`}
-                style={active === item.id ? { '--nav-accent': item.accent } as React.CSSProperties : {}}
-                onClick={() => onNav(item.id)}
-              >
-                <span className="nav-icon" style={{ color: active === item.id ? item.accent : undefined, fontSize: 14 }}>
-                  {item.icon}
-                </span>
-                <span>{item.label}</span>
-                {item.id === 'incidents' && incidentCount > 0 && (
-                  <span className="nav-badge">{incidentCount}</span>
-                )}
-              </div>
-            ))}
+        {NAV.map((group) => (
+          <div key={group.section} style={{ marginBottom: 12 }}>
+            <div className="nav-section-label">{group.section}</div>
+            {group.items.map((item) => {
+              const active = isActive(item, pathname);
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.href}
+                  className={`nav-item ${active ? "active" : ""}`}
+                  style={
+                    active
+                      ? ({
+                          "--nav-accent":
+                            item.id === "incidents"
+                              ? "var(--red)"
+                              : item.id === "redteam"
+                                ? "var(--amber)"
+                                : "var(--cyan)",
+                        } as React.CSSProperties)
+                      : {}
+                  }
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  {item.label}
+                  {item.id === "incidents" && incidentCount > 0 && (
+                    <span className="nav-badge">{incidentCount}</span>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
         ))}
       </nav>
 
-      {/* User */}
       <div className="sidebar-footer">
-        {org && (
-          <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-dim)', letterSpacing: '0.08em', padding: '0 10px 8px', textTransform: 'uppercase' }}>
-            {org.name}
-          </div>
-        )}
         <div className="sidebar-user">
-          <div className="user-avatar">
-            {(user?.email?.[0] ?? 'A').toUpperCase()}
-          </div>
+          <div className="user-avatar">{user?.email?.[0]?.toUpperCase() ?? "U"}</div>
           <div className="user-info">
-            <div className="user-email">{user?.email ?? 'admin'}</div>
-            <div className="user-role">owner</div>
+            <div className="user-email">{user?.email}</div>
+            <div className="user-role">{org?.name ?? "Default Org"}</div>
           </div>
-          <button className="logout-btn" onClick={logout} title="Sign out">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
+          <button className="logout-btn" onClick={logout} title="Sign Out">
+            ⎋
           </button>
         </div>
       </div>
