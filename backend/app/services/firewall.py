@@ -35,6 +35,12 @@ def evaluate_and_record(db: Session, request: EnforcementRequest) -> Enforcement
     if agent is None:
         raise ValueError("agent_not_found")
 
+    from app.models import PolicyPack
+    policy = db.query(PolicyPack).filter(PolicyPack.is_active == True).order_by(PolicyPack.created_at.desc()).first()
+    intent_threshold = policy.intent_match_threshold if policy else 70
+    tool_threshold = policy.tool_trust_threshold if policy else 60
+    memory_threshold = policy.memory_trust_threshold if policy else 55
+
     tool = db.query(Tool).filter(Tool.name == request.tool_name).one_or_none()
     tool_trust, tool_reasons = effective_tool_trust(tool, request.tool_name, request.tool_type, request.metadata.get("tool_description", ""))
     memories = []
@@ -56,10 +62,13 @@ def evaluate_and_record(db: Session, request: EnforcementRequest) -> Enforcement
         resource=request.resource,
         resource_sensitivity=request.resource_sensitivity,
         historical_incidents=historical_incidents,
+        intent_threshold=intent_threshold,
+        tool_threshold=tool_threshold,
+        memory_threshold=memory_threshold,
     )
     trust_score = propagate_trust([tool_trust, memory_trust, agent.trust_level], penalties=prompt_detection.score_penalty)
     sensitive = is_sensitive_resource(request.resource, request.resource_sensitivity)
-    decision = decision_for_scores(risk_score, intent_score, tool_trust, denied, sensitive)
+    decision = decision_for_scores(risk_score, intent_score, tool_trust, denied, sensitive, intent_threshold, tool_threshold)
     severity = severity_from_score(risk_score)
 
     reasons = []
@@ -152,6 +161,13 @@ def evaluate_and_record(db: Session, request: EnforcementRequest) -> Enforcement
 
     db.commit()
     db.refresh(attestation)
+
+    # Trigger background baseline recalculation via Celery
+    try:
+        from app.tasks import recalculate_agent_baseline
+        recalculate_agent_baseline.delay(str(agent.id))
+    except Exception as e:
+        print(f"Failed to dispatch Celery task: {e}")
 
     return EnforcementDecision(
         decision=decision,

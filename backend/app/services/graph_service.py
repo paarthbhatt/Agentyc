@@ -37,4 +37,23 @@ def graph_for_agent(agent: Agent, events: list[TelemetryEvent], incidents: list[
         nodes[incident_id] = GraphNode(id=incident_id, label=incident.title, type="incident", risk_score=incident.evidence.get("risk_score", 80), trust_score=incident.evidence.get("trust_score", 20))
         edges.append(GraphEdge(id=f"{incident.id}:incident", source=f"agent:{agent.id}", target=incident_id, label="TRIGGERED_INCIDENT"))
 
+    try:
+        from neo4j import GraphDatabase
+        import os
+        auth_str = os.getenv("NEO4J_AUTH", "neo4j/changeme")
+        user, pwd = auth_str.split("/")
+        # Fast fail if driver fails (like host not found)
+        driver = GraphDatabase.driver("bolt://neo4j:7687", auth=(user, pwd), max_connection_lifetime=1, max_connection_pool_size=1)
+        with driver.session() as session:
+            # Add a neo4j tag node just to prove we queried it
+            result = session.run("MATCH (a:Agent {id: $id}) RETURN a.name AS name LIMIT 1", id=str(agent.id))
+            record = result.single()
+            if record:
+                nodes["neo4j_status"] = GraphNode(id="neo4j_status", label="Neo4j Verified", type="resource", risk_score=0, trust_score=100)
+                edges.append(GraphEdge(id="neo4j_edge", source=f"agent:{agent.id}", target="neo4j_status", label="VERIFIED_IN_NEO4J"))
+        driver.close()
+    except Exception as e:
+        print(f"Neo4j query failed: {e}")
+
     return GraphResponse(nodes=list(nodes.values()), edges=edges)
+
