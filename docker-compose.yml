@@ -6,7 +6,7 @@ services:
 
   neo4j:
     image: neo4j:5-community
-    profiles: ["analytics"]
+    # profiles: ["analytics"]
     environment:
       # Set NEO4J_AUTH in your .env (e.g. neo4j/<your-password>) before enabling this profile.
       NEO4J_AUTH: ${NEO4J_AUTH:-neo4j/changeme}
@@ -16,7 +16,7 @@ services:
 
   opensearch:
     image: opensearchproject/opensearch:2
-    profiles: ["analytics"]
+    # profiles: ["analytics"]
     environment:
       discovery.type: single-node
       plugins.security.disabled: "true"
@@ -43,8 +43,25 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-http://localhost:5173/auth/callback}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
     ports:
       - "8000:8000"
+    depends_on:
+      - redis
+
+  celery_worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./agent_sentinel.db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    depends_on:
+      - redis
+      - backend
 
   frontend:
     build: ./frontend
@@ -54,3 +71,6 @@ services:
       - backend
     ports:
       - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
