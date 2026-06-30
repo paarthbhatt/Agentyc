@@ -2,13 +2,14 @@
 
 **Trust Nothing. Verify Every Thought.**
 
-> ⚠️ **Security notice:** This is a working prototype, **not production-hardened**.
-> Before any real deployment you MUST rotate all credentials (`ADMIN_API_KEY`,
-> `JWT_SECRET_KEY`, `API_KEY_PEPPER`), set `ENVIRONMENT=production`, and review the
-> [Security Policy](./SECURITY.md). The demo seeds a default `admin@admin` / `admin`
-> user **in development only** — this is disabled in production.
+> ⚠️ **Security notice:** This is a hardened prototype with JWT auth, Google OAuth, HMAC agent keys,
+> rate limiting, security headers, and fail-closed admin enforcement. Treat it as a production
+> starting point, not a finished enterprise deployment. Before real deployment, set strong secrets
+> for `ADMIN_API_KEY`, `JWT_SECRET_KEY`, `API_KEY_PEPPER`, and set `ENVIRONMENT=production`.
 
-Agent Sentinel is a runtime security platform for autonomous AI agents. It treats every agent as a user, workload, insider threat, and machine identity. The current implementation includes runtime telemetry, pre-execution enforcement, intent matching, tool trust, memory security, incident response, replay, multi-agent security, MCP assessment, behavioral baselines, red-team scenario generation, sandbox policy profiles, and a SOC-style dashboard.
+Agent Sentinel is a runtime security platform for autonomous AI agents. It treats every agent as a user, workload, insider threat, and machine identity. The platform is designed so that all prompts, tools, memory, MCP servers, and external data are assumed hostile by default.
+
+The current build includes: runtime telemetry with full audit trail, pre-execution enforcement with Intent Match Score, agent identity and scoped permissions, tool trust scoring, memory security and poisoning detection, automated incident response and recommendations, attestation records with integrity hashes, attack replay, agent security graph, Python SDK with pre-enforcement hooks, dark SOC dashboard, live SSE telemetry stream, MCP hidden-instruction and dangerous-capability assessment, multi-agent delegation and trust inheritance scoring, local threat intelligence indicators, sandbox policy profiles, behavioral baselines and anomaly scoring, and white-box red-team scenario generation.
 
 ## Implemented product capabilities
 
