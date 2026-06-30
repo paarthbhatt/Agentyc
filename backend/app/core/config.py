@@ -9,9 +9,13 @@ class Settings:
     api_prefix: str = "/api/v1"
     environment: str = os.getenv("ENVIRONMENT", "development")
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./agent_sentinel.db")
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    celery_broker_url: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
     cors_origins: list[str] = [
         origin.strip()
-        for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+        for origin in os.getenv(
+            "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+        ).split(",")
         if origin.strip()
     ]
     api_key_pepper: str = os.getenv("API_KEY_PEPPER", "dev-only-change-me")
@@ -19,15 +23,22 @@ class Settings:
     enable_demo_seed: bool = os.getenv("ENABLE_DEMO_SEED", "true").lower() == "true"
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "240"))
     fail_closed: bool = os.getenv("SENTINEL_FAIL_CLOSED", "true").lower() == "true"
+    allow_open_register: bool = (
+        os.getenv("AGENT_SENTINEL_ALLOW_OPEN_REGISTER", "true").lower() == "true"
+    )
     # JWT configuration. No hardcoded default secret: in production, an unset
     # JWT_SECRET_KEY is a startup error (see get_settings). In development we
     # fall back to an obvious dev-only value so local dev keeps working.
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "")
-    access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    access_token_expire_minutes: int = int(
+        os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+    )
     refresh_token_expire_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    oauth_redirect_uri: str = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:5173/auth/callback")
+    oauth_redirect_uri: str = os.getenv(
+        "OAUTH_REDIRECT_URI", "http://localhost:5173/auth/callback"
+    )
 
     @property
     def is_production(self) -> bool:
