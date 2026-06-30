@@ -41,6 +41,12 @@ def create_incident(
         response_actions=response_actions or recommended_actions(category, severity),
     )
     db.add(incident)
+    db.commit()
+    db.refresh(incident)
+    
+    from app.tasks import sync_incident_neo4j, index_incident_opensearch
+    sync_incident_neo4j.delay(str(incident.id))
+    index_incident_opensearch.delay(str(incident.id))
 
     event = TelemetryEvent(
         agent_id=agent.id,
