@@ -155,10 +155,34 @@ async function request<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type PolicyPack = {
+  id: string;
+  name: string;
+  description: string;
+  intent_match_threshold: number;
+  tool_trust_threshold: number;
+  memory_trust_threshold: number;
+  enforcement_mode: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AuditLog = {
+  id: string;
+  user_id: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  details: Record<string, unknown>;
+  created_at: string;
+};
+
 export const api = {
   summary: () => request<DashboardSummary>("/dashboard/summary"),
   agents: () => request<Agent[]>("/agents"),
   incidents: () => request<Incident[]>("/incidents"),
+  auditLogs: () => request<AuditLog[]>("/audit-logs"),
   agentRisk: () =>
     request<
       {
@@ -184,4 +208,5 @@ export const api = {
   redTeamScenarios: () => request<RedTeamScenario[]>("/redteam/scenarios"),
   baseline: (agentId: string) =>
     request<BehaviorBaseline>(`/baselines/agents/${agentId}`),
+  policies: () => request<PolicyPack[]>("/policies"),
 };
