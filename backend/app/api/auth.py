@@ -1,9 +1,7 @@
-"""Authentication routes."""
+import uuid
+from typing import Optional
 
-from datetime import timedelta
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -11,294 +9,171 @@ from app.auth import (
     create_refresh_token,
     hash_password,
     verify_password,
-    decode_refresh_token,
+    verify_token,
 )
 from app.db.session import get_db
-from app.dependencies import CurrentUser, CurrentOrg
-from app.models import User, Organization, OrganizationMember
-from app.schemas import (
-    UserRegister,
-    UserLogin,
-    TokenRefresh,
-    AuthTokenResponse,
-    UserRead,
-    OrganizationRead,
-)
+from app.models import Organization, OrganizationMember, User
+from app.schemas import AuthTokenResponse, UserLogin, UserRegister
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=AuthTokenResponse)
-async def register(
-    payload: UserRegister,
-    db: Annotated[Session, Depends(get_db)],
-):
-    """Register new user and create organization."""
-    # Check if user exists
-    existing_user = db.query(User).filter(User.email == payload.email).first()
-    if existing_user:
+def get_current_user(
+    authorization: str = Header(default=""), db: Session = Depends(get_db)
+) -> User:
+    """
+    JWT/OIDC Validator.
+    Validates Bearer JWT tokens issued by the login/register endpoints.
+    """
+    if not authorization.startswith("Bearer "):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists",
+            status_code=401, detail="Missing or invalid Authorization header"
         )
 
-    # Create user
-    user = User(
-        email=payload.email,
-        password_hash=hash_password(payload.password),
-        is_active=True,
-    )
-    db.add(user)
-    db.flush()
+    token_str = authorization.split(" ")[1]
+    payload = verify_token(token_str)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    # Create organization
-    slug = payload.org_name.lower().replace(" ", "-")
-    org = Organization(
-        name=payload.org_name,
-        slug=slug,
-        owner_id=user.id,
-    )
-    db.add(org)
-    db.flush()
+    user = db.query(User).filter(User.id == uuid.UUID(payload.user_id)).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
 
-    # Create member (owner)
-    member = OrganizationMember(
-        org_id=org.id,
-        user_id=user.id,
-        role="owner",
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Inactive user")
+
+    return user
+
+
+def get_current_org(
+    x_org_id: Optional[str] = Header(default=None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Organization:
+    """
+    Resolves the tenant context for the request.
+    If x_org_id is provided, verifies the user belongs to it.
+    Otherwise defaults to the user's first organization.
+    """
+    if x_org_id:
+        try:
+            org_id = uuid.UUID(x_org_id)
+            membership = (
+                db.query(OrganizationMember)
+                .filter(
+                    OrganizationMember.user_id == user.id,
+                    OrganizationMember.org_id == org_id,
+                )
+                .first()
+            )
+            if not membership:
+                raise HTTPException(
+                    status_code=403, detail="Not a member of this organization"
+                )
+            return membership.organization
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid org_id format")
+
+    # Default to first org
+    membership = (
+        db.query(OrganizationMember)
+        .filter(OrganizationMember.user_id == user.id)
+        .first()
     )
-    db.add(member)
+    if membership:
+        return membership.organization
+
+    # Auto-provision a default org for prototype
+    org = db.query(Organization).filter(Organization.slug == "default").first()
+    if not org:
+        org = Organization(name="Default Org", slug="default", owner_id=user.id)
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+    # Add membership
+    mem = OrganizationMember(org_id=org.id, user_id=user.id, role="admin")
+    db.add(mem)
     db.commit()
 
-    # Create tokens
-    access_token = create_access_token(
-        user_id=str(user.id),
-        org_id=str(org.id),
-        email=user.email,
-        role="owner",
-    )
-    refresh_token = create_refresh_token(
-        user_id=str(user.id),
-        org_id=str(org.id),
-        email=user.email,
-    )
-
-    return AuthTokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user=UserRead.model_validate(user),
-        organization=OrganizationRead.model_validate(org),
-    )
+    return org
 
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login(
-    payload: UserLogin,
-    db: Annotated[Session, Depends(get_db)],
-):
-    """Login user."""
-    user = db.query(User).filter(User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
+def login(request: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid email or password")
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive",
-        )
+    if not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid email or password")
 
-    # Get user's organization (primary member role)
-    member = db.query(OrganizationMember).filter(
-        OrganizationMember.user_id == user.id
-    ).first()
-    if not member:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User not part of any organization",
-        )
+    org = (
+        db.query(OrganizationMember)
+        .filter(OrganizationMember.user_id == user.id)
+        .first()
+    )
+    if org:
+        org = org.organization
+    else:
+        # fallback
+        org = db.query(Organization).first()
 
-    org = db.query(Organization).filter(
-        Organization.id == member.org_id
-    ).first()
-
-    # Create tokens
     access_token = create_access_token(
         user_id=str(user.id),
-        org_id=str(org.id),
+        org_id=str(org.id) if org else "",
         email=user.email,
-        role=member.role,
+        role="admin",
     )
     refresh_token = create_refresh_token(
-        user_id=str(user.id),
-        org_id=str(org.id),
-        email=user.email,
+        user_id=str(user.id), org_id=str(org.id) if org else "", email=user.email
     )
 
-    return AuthTokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user=UserRead.model_validate(user),
-        organization=OrganizationRead.model_validate(org),
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user,
+        "organization": org,
+    }
+
+
+@router.post("/register", response_model=AuthTokenResponse)
+def register(request: UserRegister, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == request.email).first()
+    if user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    user = User(
+        email=request.email,
+        password_hash=hash_password(request.password),
+        is_active=True,
     )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
+    slug = request.org_name.lower().replace(" ", "-") + "-" + str(uuid.uuid4())[:8]
+    org = Organization(name=request.org_name, slug=slug, owner_id=user.id)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
 
-@router.post("/refresh", response_model=AuthTokenResponse)
-async def refresh_token(
-    payload: TokenRefresh,
-    db: Annotated[Session, Depends(get_db)],
-):
-    """Refresh access token."""
-    token_data = decode_refresh_token(payload.refresh_token)
-    if not token_data:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
+    mem = OrganizationMember(org_id=org.id, user_id=user.id, role="owner")
+    db.add(mem)
+    db.commit()
 
-    user = db.query(User).filter(User.id == token_data["user_id"]).first()
-    if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
-        )
-
-    org = db.query(Organization).filter(
-        Organization.id == token_data["org_id"]
-    ).first()
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Organization not found",
-        )
-
-    member = db.query(OrganizationMember).filter(
-        OrganizationMember.org_id == org.id,
-        OrganizationMember.user_id == user.id,
-    ).first()
-
-    # Create new tokens
     access_token = create_access_token(
-        user_id=str(user.id),
-        org_id=str(org.id),
-        email=user.email,
-        role=member.role if member else "analyst",
+        user_id=str(user.id), org_id=str(org.id), email=user.email, role="owner"
     )
-    new_refresh_token = create_refresh_token(
-        user_id=str(user.id),
-        org_id=str(org.id),
-        email=user.email,
+    refresh_token = create_refresh_token(
+        user_id=str(user.id), org_id=str(org.id), email=user.email
     )
-
-    return AuthTokenResponse(
-        access_token=access_token,
-        refresh_token=new_refresh_token,
-        user=UserRead.model_validate(user),
-        organization=OrganizationRead.model_validate(org),
-    )
-
-
-@router.post("/logout")
-async def logout(current_user: CurrentUser):
-    """Logout user (client should discard token)."""
-    return {"message": "Logged out successfully"}
-
-
-@router.get("/me", response_model=UserRead)
-async def get_current_user_info(current_user: CurrentUser):
-    """Get current user info."""
-    return {
-        "id": current_user["user_id"],
-        "email": current_user["email"],
-        "is_active": True,
-    }
-
-
-# API Key Management Endpoints
-
-from app.models import APIKey
-from app.schemas import APIKeyCreate, APIKeyRead
-from app.services.api_key_service import generate_api_key, hash_api_key
-from datetime import datetime, timezone
-
-
-@router.post("/api-keys", response_model=dict)
-async def create_api_key(
-    payload: APIKeyCreate,
-    current_user: CurrentUser,
-    org: CurrentOrg,
-    db: Annotated[Session, Depends(get_db)],
-):
-    """Create a new API key."""
-    key = generate_api_key()
-    key_hash = hash_api_key(key)
-
-    api_key = APIKey(
-        org_id=org.id,
-        user_id=current_user["user_id"],
-        key_hash=key_hash,
-        name=payload.name,
-        expires_at=payload.expires_at,
-    )
-    db.add(api_key)
-    db.commit()
 
     return {
-        "id": str(api_key.id),
-        "key": key,  # Only return full key once
-        "name": api_key.name,
-        "created_at": api_key.created_at,
-        "expires_at": api_key.expires_at,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user,
+        "organization": org,
     }
-
-
-@router.get("/api-keys")
-async def list_api_keys(
-    current_user: CurrentUser,
-    org: CurrentOrg,
-    db: Annotated[Session, Depends(get_db)],
-):
-    """List API keys for organization."""
-    keys = db.query(APIKey).filter(
-        APIKey.org_id == org.id,
-        APIKey.user_id == current_user["user_id"],
-    ).all()
-
-    return [
-        {
-            "id": str(k.id),
-            "name": k.name,
-            "created_at": k.created_at,
-            "expires_at": k.expires_at,
-        }
-        for k in keys
-    ]
-
-
-@router.delete("/api-keys/{key_id}")
-async def delete_api_key(
-    key_id: str,
-    current_user: CurrentUser,
-    org: CurrentOrg,
-    db: Annotated[Session, Depends(get_db)],
-):
-    """Delete an API key."""
-    key = db.query(APIKey).filter(
-        APIKey.id == key_id,
-        APIKey.org_id == org.id,
-        APIKey.user_id == current_user["user_id"],
-    ).first()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="API key not found",
-        )
-
-    db.delete(key)
-    db.commit()
-
-    return {"message": "API key deleted"}
-
