@@ -141,7 +141,7 @@ export default function Overview({ summary, agents, incidents, events }: Props) 
                 </div>
                 <div className="incident-cause">{inc.root_cause}</div>
                 <div className="incident-actions">
-                  {inc.response_actions.slice(0, 3).map(a => (
+                  {(inc.response_actions || []).slice(0, 3).map(a => (
                     <span key={a} className="action-tag">{a}</span>
                   ))}
                 </div>
