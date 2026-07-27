@@ -1,8 +1,19 @@
 import json
-from typing import Any, Callable, Dict
 from functools import wraps
+from typing import Any, Callable
 
 from .client import AgentSentinelClient, SecurityBlock
+
+
+def _record_node_event(
+    client: AgentSentinelClient,
+    event_type: str,
+    *,
+    severity: str,
+    payload: dict[str, Any],
+) -> None:
+    client.record_event(event_type, severity=severity, payload=payload)
+
 
 def SentinelNodeWrapper(
     client: AgentSentinelClient,
@@ -18,7 +29,7 @@ def SentinelNodeWrapper(
 
     def decorator(node_func: Callable) -> Callable:
         @wraps(node_func)
-        def wrapper(state: Dict[str, Any], *args, **kwargs) -> Any:
+        def wrapper(state: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
             # 1. Enforce Policies before execution
             input_text = json.dumps(state, default=str)
             try:
@@ -33,10 +44,11 @@ def SentinelNodeWrapper(
                 )
             except SecurityBlock as e:
                 # If blocked, log the failure and raise
-                client.log_event(
-                    event_type="langgraph.node.blocked",
+                _record_node_event(
+                    client,
+                    "langgraph.node.blocked",
                     severity="critical",
-                    payload={"node": node_name, "reason": str(e), "state": state}
+                    payload={"node": node_name, "reason": str(e), "state": state},
                 )
                 raise RuntimeError(f"Agent Sentinel blocked execution of node '{node_name}': {e}") from e
 
@@ -45,22 +57,24 @@ def SentinelNodeWrapper(
                 result = node_func(state, *args, **kwargs)
                 
                 # 3. Log the successful transition
-                client.log_event(
-                    event_type="langgraph.state.transition",
+                _record_node_event(
+                    client,
+                    "langgraph.state.transition",
                     severity="info",
                     payload={
                         "node": node_name,
-                        "state_update": result
-                    }
+                        "state_update": result,
+                    },
                 )
                 return result
             except Exception as ex:
-                client.log_event(
-                    event_type="langgraph.node.error",
+                _record_node_event(
+                    client,
+                    "langgraph.node.error",
                     severity="high",
-                    payload={"node": node_name, "error": str(ex)}
+                    payload={"node": node_name, "error": str(ex)},
                 )
-                raise ex
+                raise
 
         return wrapper
 

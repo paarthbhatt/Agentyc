@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import time
 import urllib.error
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -55,7 +55,12 @@ class AgentSentinelClient:
         payload: dict[str, Any] | None = None,
         trust_score: int = 50,
         risk_score: int = 20,
+        event_id: str | None = None,
+        client_event_id: str | None = None,
     ) -> dict[str, Any]:
+        if event_id and client_event_id and event_id != client_event_id:
+            raise ValueError("event_id and client_event_id must match when both are provided")
+        idempotency_key = client_event_id or event_id or str(uuid.uuid4())
         return self._request(
             "POST",
             "/api/v1/telemetry/events",
@@ -67,8 +72,13 @@ class AgentSentinelClient:
                 "payload": payload or {},
                 "trust_score": trust_score,
                 "risk_score": risk_score,
+                "client_event_id": idempotency_key,
             },
         )
+
+    def log_event(self, event_type: str, **kwargs: Any) -> dict[str, Any]:
+        """Backward-compatible alias for integrations using the old method name."""
+        return self.record_event(event_type, **kwargs)
 
     def before_tool_call(
         self,
@@ -78,6 +88,7 @@ class AgentSentinelClient:
         action: str,
         resource: str,
         session_id: str = "default",
+        action_id: str | None = None,
         tool_type: str = "api",
         resource_sensitivity: str = "internal",
         reasoning_summary: str = "",
@@ -90,7 +101,7 @@ class AgentSentinelClient:
             {
                 "agent_id": self.agent_id,
                 "session_id": session_id,
-                "action_id": f"sdk-{int(time.time() * 1000)}",
+                "action_id": action_id or f"sdk-{uuid.uuid4()}",
                 "goal": goal,
                 "reasoning_summary": reasoning_summary,
                 "tool_name": tool_name,
