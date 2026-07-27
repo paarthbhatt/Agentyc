@@ -51,8 +51,29 @@ GOAL_KEYWORDS = {
     "finance": "finance",
 }
 
-DANGEROUS_ACTIONS = {"delete", "exfiltrate", "upload", "download", "execute", "shell", "write", "modify", "grant", "revoke"}
-HIGH_SENSITIVITY = {"secret", "secrets", "credential", "credentials", "payroll", "hr", "production", "customer", "payment"}
+DANGEROUS_ACTIONS = {
+    "delete",
+    "exfiltrate",
+    "upload",
+    "download",
+    "execute",
+    "shell",
+    "write",
+    "modify",
+    "grant",
+    "revoke",
+}
+HIGH_SENSITIVITY = {
+    "secret",
+    "secrets",
+    "credential",
+    "credentials",
+    "payroll",
+    "hr",
+    "production",
+    "customer",
+    "payment",
+}
 
 
 @dataclass(frozen=True)
@@ -68,7 +89,11 @@ def clamp(value: int, low: int = 0, high: int = 100) -> int:
 def detect_patterns(text: str, patterns: dict[str, str]) -> list[str]:
     if not text:
         return []
-    return [name for name, pattern in patterns.items() if re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)]
+    return [
+        name
+        for name, pattern in patterns.items()
+        if re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+    ]
 
 
 def detect_prompt_injection(text: str) -> DetectionResult:
@@ -103,10 +128,14 @@ def classify_resource(resource: str) -> str:
 
 def is_sensitive_resource(resource: str, sensitivity: str) -> bool:
     normalized = f"{resource} {sensitivity}".lower()
-    return sensitivity.lower() in {"restricted", "confidential", "secret", "critical"} or any(word in normalized for word in HIGH_SENSITIVITY)
+    return sensitivity.lower() in {"restricted", "confidential", "secret", "critical"} or any(
+        word in normalized for word in HIGH_SENSITIVITY
+    )
 
 
-def intent_match_score(goal: str, action: str, resource: str, sensitivity: str) -> tuple[int, list[str]]:
+def intent_match_score(
+    goal: str, action: str, resource: str, sensitivity: str
+) -> tuple[int, list[str]]:
     goal_category = classify_goal(goal)
     resource_category = classify_resource(resource)
     action_norm = action.lower()
@@ -117,7 +146,9 @@ def intent_match_score(goal: str, action: str, resource: str, sensitivity: str) 
         score += 10
     elif resource_category != "general" and goal_category != "general":
         score -= 45
-        reasons.append(f"Requested resource category {resource_category} mismatches goal category {goal_category}")
+        reasons.append(
+            f"Requested resource category {resource_category} mismatches goal category {goal_category}"
+        )
     elif resource_category != "general" and goal_category == "general":
         score -= 20
         reasons.append(f"Goal is too broad for resource category {resource_category}")
@@ -126,7 +157,10 @@ def intent_match_score(goal: str, action: str, resource: str, sensitivity: str) 
         score -= 18
         reasons.append(f"Action '{action}' is high impact and requires stronger intent alignment")
 
-    if is_sensitive_resource(resource, sensitivity) and goal_category not in {resource_category, "security_operations"}:
+    if is_sensitive_resource(resource, sensitivity) and goal_category not in {
+        resource_category,
+        "security_operations",
+    }:
         score -= 28
         reasons.append(f"Sensitive resource '{resource}' is not justified by goal")
 

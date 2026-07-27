@@ -64,7 +64,15 @@ def calculate_action_risk(
     return clamp(risk), reasons
 
 
-def decision_for_scores(risk_score: int, intent_score: int, tool_trust_score: int, permission_denied: bool, sensitive: bool, intent_threshold: int = 70, tool_threshold: int = 60) -> str:
+def decision_for_scores(
+    risk_score: int,
+    intent_score: int,
+    tool_trust_score: int,
+    permission_denied: bool,
+    sensitive: bool,
+    intent_threshold: int = 70,
+    tool_threshold: int = 60,
+) -> str:
     if permission_denied:
         return "block"
     # Block if intent score is severely below threshold (e.g. less than half)

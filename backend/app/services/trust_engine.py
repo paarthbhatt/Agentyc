@@ -35,7 +35,9 @@ def default_tool_trust(name: str, tool_type: str, description: str = "") -> tupl
     return clamp(score), reasons
 
 
-def effective_tool_trust(tool: Tool | None, tool_name: str, tool_type: str, description: str = "") -> tuple[int, list[str]]:
+def effective_tool_trust(
+    tool: Tool | None, tool_name: str, tool_type: str, description: str = ""
+) -> tuple[int, list[str]]:
     if tool is None:
         score, reasons = default_tool_trust(tool_name, tool_type, description)
         reasons.append("Tool is not registered in trust registry")
@@ -64,5 +66,8 @@ def memory_influence_trust(memory_objects: list[MemoryObject]) -> tuple[int, lis
     if not memory_objects:
         return 70, []
     scores = [memory.trust_level for memory in memory_objects]
-    reasons = [f"Memory object {memory.id} trust={memory.trust_level} status={memory.security_status}" for memory in memory_objects]
+    reasons = [
+        f"Memory object {memory.id} trust={memory.trust_level} status={memory.security_status}"
+        for memory in memory_objects
+    ]
     return propagate_trust(scores), reasons

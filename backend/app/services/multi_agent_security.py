@@ -3,7 +3,16 @@ from __future__ import annotations
 from app.models import Agent
 from app.services.detection import clamp, detect_prompt_injection
 
-PRIVILEGE_ESCALATION_TERMS = {"admin", "root", "secrets", "payroll", "hr", "production", "shell.execute", "database.admin"}
+PRIVILEGE_ESCALATION_TERMS = {
+    "admin",
+    "root",
+    "secrets",
+    "payroll",
+    "hr",
+    "production",
+    "shell.execute",
+    "database.admin",
+}
 
 
 def evaluate_delegation(

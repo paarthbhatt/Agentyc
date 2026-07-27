@@ -3,16 +3,17 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.core.security import sha256_text
-from app.models import MemoryObject, TelemetryEvent
+from app.models import Agent, MemoryObject, TelemetryEvent
 from app.services.detection import clamp, detect_memory_poisoning
 
 
-def create_memory_object(db: Session, *, agent_id, source: str, content: str) -> MemoryObject:
+def create_memory_object(db: Session, *, agent: Agent, source: str, content: str) -> MemoryObject:
     detection = detect_memory_poisoning(content)
     trust = clamp(70 - detection.score_penalty)
     status = "quarantined" if detection.indicators else "active"
     memory = MemoryObject(
-        agent_id=agent_id,
+        org_id=agent.org_id,
+        agent_id=agent.id,
         source=source,
         content_hash=sha256_text(content),
         preview=content[:280],
@@ -24,15 +25,20 @@ def create_memory_object(db: Session, *, agent_id, source: str, content: str) ->
     db.flush()
     db.add(
         TelemetryEvent(
-            agent_id=agent_id,
+            org_id=agent.org_id,
+            agent_id=agent.id,
             session_id="memory",
             event_type="memory.write",
             severity="high" if detection.indicators else "info",
-            payload={"memory_id": str(memory.id), "source": source, "indicators": detection.indicators, "status": status},
+            payload={
+                "memory_id": str(memory.id),
+                "source": source,
+                "indicators": detection.indicators,
+                "status": status,
+            },
             trust_score=trust,
             risk_score=100 - trust,
         )
     )
-    db.commit()
-    db.refresh(memory)
+    db.flush()
     return memory

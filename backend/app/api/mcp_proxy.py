@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_api_key
-from app.models import Agent, MCPAssessment, TelemetryEvent
+from app.api.auth import Principal, get_agent_principal
+from app.db.session import get_db
 from app.schemas import EnforcementRequest
 from app.services.firewall import evaluate_and_record
 
@@ -26,8 +26,7 @@ def execute_mcp_tool(
     tool_name: str,
     payload: MCPExecuteRequest,
     db: Session = Depends(get_db),
-    # Optional: we can require an API key from the calling agent to verify identity
-    # x_api_key: str = Depends(require_api_key)
+    principal: Principal = Depends(get_agent_principal),
 ) -> dict[str, Any]:
     """
     Proxy an MCP tool execution request.
@@ -37,8 +36,10 @@ def execute_mcp_tool(
     # 1. Evaluate through cognitive firewall
     try:
         agent_uuid = uuid.UUID(payload.agent_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid agent_id format")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid agent_id format") from exc
+    if principal.agent_id != agent_uuid:
+        raise HTTPException(status_code=403, detail="Agent key does not match requested agent")
 
     request = EnforcementRequest(
         agent_id=agent_uuid,
@@ -54,11 +55,13 @@ def execute_mcp_tool(
     )
 
     try:
-        decision = evaluate_and_record(db, request)
-    except ValueError as e:
-        if str(e) == "agent_not_found":
-            raise HTTPException(status_code=404, detail="Agent not found")
-        raise HTTPException(status_code=400, detail=str(e))
+        decision = evaluate_and_record(db, request, org_id=principal.org_id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        if str(exc) == "agent_not_found":
+            raise HTTPException(status_code=404, detail="Agent not found") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if decision.decision == "block":
         raise HTTPException(
@@ -70,15 +73,15 @@ def execute_mcp_tool(
             },
         )
 
-    # 2. Forward to actual MCP server (Mocked for now)
-    # In a real implementation, this would look up the MCP server URL/stdio process
-    # and forward the JSON-RPC execution request.
-    
-    mocked_result = f"Successfully executed {tool_name} on {server_name} with args {payload.arguments}"
-    
+    # Execution remains an explicit simulation until a configured transport is available.
+    mocked_result = (
+        f"Successfully executed {tool_name} on {server_name} with args {payload.arguments}"
+    )
+
     # 3. Return the result back to the agent
     return {
         "status": "success",
+        "execution_mode": "simulation",
         "decision": decision.decision,
         "result": mocked_result,
         "risk_score": decision.risk_score,

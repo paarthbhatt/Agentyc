@@ -14,9 +14,16 @@ def _append_unique(values: list[str], value: str, limit: int = 50) -> list[str]:
 
 
 def update_behavior_baseline(db: Session, event: TelemetryEvent) -> BehaviorBaseline:
-    baseline = db.query(BehaviorBaseline).filter(BehaviorBaseline.agent_id == event.agent_id).one_or_none()
+    baseline = (
+        db.query(BehaviorBaseline)
+        .filter(
+            BehaviorBaseline.org_id == event.org_id,
+            BehaviorBaseline.agent_id == event.agent_id,
+        )
+        .one_or_none()
+    )
     if baseline is None:
-        baseline = BehaviorBaseline(agent_id=event.agent_id)
+        baseline = BehaviorBaseline(org_id=event.org_id, agent_id=event.agent_id)
         db.add(baseline)
         db.flush()
 
