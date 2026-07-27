@@ -4,14 +4,16 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 Decision = Literal["allow", "block", "challenge", "log_only"]
+Severity = Literal["info", "low", "medium", "high", "critical"]
 
 
 # Auth Schemas
 class UserRegister(BaseModel):
     """User registration request."""
+
     email: EmailStr
     password: str = Field(min_length=8, max_length=255)
     org_name: str = Field(min_length=1, max_length=255)
@@ -19,17 +21,24 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     """User login request."""
+
     email: str = Field(min_length=1, max_length=255)  # plain str allows admin@admin
     password: str = Field(min_length=1, max_length=255)
 
 
 class TokenRefresh(BaseModel):
     """Token refresh request."""
-    refresh_token: str
+
+    refresh_token: str | None = None
+
+
+class OrganizationSwitch(BaseModel):
+    org_id: UUID
 
 
 class UserRead(BaseModel):
     """User read response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -40,6 +49,7 @@ class UserRead(BaseModel):
 
 class OrganizationRead(BaseModel):
     """Organization read response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -50,6 +60,7 @@ class OrganizationRead(BaseModel):
 
 class OrganizationMemberRead(BaseModel):
     """Organization member read response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -60,12 +71,14 @@ class OrganizationMemberRead(BaseModel):
 
 class APIKeyCreate(BaseModel):
     """API key creation request."""
+
     name: str = Field(min_length=1, max_length=255)
     expires_at: datetime | None = None
 
 
 class APIKeyRead(BaseModel):
     """API key read response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -77,10 +90,15 @@ class APIKeyRead(BaseModel):
 class AuditLogRead(BaseModel):
     id: UUID
     user_id: UUID | None
+    actor_type: str
+    actor_id: str | None
     action: str
     resource_type: str
     resource_id: str
     details: dict[str, Any]
+    request_id: str | None
+    previous_hash: str | None
+    record_hash: str
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -88,6 +106,7 @@ class AuditLogRead(BaseModel):
 
 class AuthTokenResponse(BaseModel):
     """Auth token response."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -95,12 +114,18 @@ class AuthTokenResponse(BaseModel):
     organization: OrganizationRead
 
 
+class AuthSessionResponse(BaseModel):
+    user: UserRead
+    organization: OrganizationRead
+    role: str
+
+
 class AgentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
-    framework: str = "custom"
-    owner: str = "unassigned"
-    environment: str = "development"
-    role: str = "research_agent"
+    framework: str = Field(default="custom", min_length=1, max_length=80)
+    owner: str = Field(default="unassigned", min_length=1, max_length=160)
+    environment: Literal["development", "staging", "production"] = "development"
+    role: str = Field(default="research_agent", min_length=1, max_length=80)
     permissions: dict[str, Any] | None = None
 
 
@@ -172,12 +197,13 @@ class ToolRead(BaseModel):
 
 class TelemetryEventCreate(BaseModel):
     agent_id: UUID
-    session_id: str = "default"
-    event_type: str
-    severity: str = "info"
+    session_id: str = Field(default="default", min_length=1, max_length=120)
+    event_type: str = Field(min_length=1, max_length=80)
+    severity: Severity = "info"
     payload: dict[str, Any] = Field(default_factory=dict)
     trust_score: int = Field(default=50, ge=0, le=100)
     risk_score: int = Field(default=20, ge=0, le=100)
+    client_event_id: str | None = Field(default=None, max_length=120)
 
 
 class TelemetryEventRead(BaseModel):
@@ -191,21 +217,22 @@ class TelemetryEventRead(BaseModel):
     payload: dict[str, Any]
     trust_score: int
     risk_score: int
+    client_event_id: str | None
     occurred_at: datetime
 
 
 class EnforcementRequest(BaseModel):
     agent_id: UUID
-    session_id: str = "default"
-    action_id: str | None = None
-    goal: str
-    reasoning_summary: str = ""
-    tool_name: str
-    tool_type: str = "api"
-    action: str
-    resource: str
+    session_id: str = Field(default="default", min_length=1, max_length=120)
+    action_id: str | None = Field(default=None, max_length=120)
+    goal: str = Field(min_length=1, max_length=8000)
+    reasoning_summary: str = Field(default="", max_length=16000)
+    tool_name: str = Field(min_length=1, max_length=160)
+    tool_type: str = Field(default="api", min_length=1, max_length=60)
+    action: str = Field(min_length=1, max_length=160)
+    resource: str = Field(min_length=1, max_length=1000)
     resource_sensitivity: str = "internal"
-    input_text: str = ""
+    input_text: str = Field(default="", max_length=200_000)
     memory_object_ids: list[UUID] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -220,6 +247,8 @@ class EnforcementDecision(BaseModel):
     recommended_response_actions: list[str]
     incident_id: UUID | None = None
     attestation_id: UUID | None = None
+    policy_id: UUID | None = None
+    policy_version: int | None = None
 
 
 class IncidentRead(BaseModel):
@@ -240,14 +269,14 @@ class IncidentRead(BaseModel):
 
 
 class IncidentUpdate(BaseModel):
-    status: str | None = None
+    status: Literal["open", "investigating", "contained", "resolved", "closed"] | None = None
     response_actions: list[str] | None = None
 
 
 class MemoryCreate(BaseModel):
     agent_id: UUID
-    source: str = "unknown"
-    content: str
+    source: str = Field(default="unknown", min_length=1, max_length=160)
+    content: str = Field(min_length=1, max_length=1_000_000)
 
 
 class MemoryRead(BaseModel):
@@ -348,13 +377,16 @@ class SandboxProfileCreate(BaseModel):
     database_policy: str = "scoped"
     allowed_hosts: list[str] = Field(default_factory=list)
     allowed_paths: list[str] = Field(default_factory=list)
-    resource_limits: dict[str, Any] = Field(default_factory=lambda: {"cpu": "1", "memory": "512Mi", "timeout_seconds": 300})
+    resource_limits: dict[str, Any] = Field(
+        default_factory=lambda: {"cpu": "1", "memory": "512Mi", "timeout_seconds": 300}
+    )
 
 
 class SandboxProfileRead(SandboxProfileCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    enforcement_status: str
     created_at: datetime
 
 
@@ -422,7 +454,7 @@ class PolicyPackCreate(BaseModel):
     intent_match_threshold: int = Field(default=70, ge=0, le=100)
     tool_trust_threshold: int = Field(default=50, ge=0, le=100)
     memory_trust_threshold: int = Field(default=60, ge=0, le=100)
-    enforcement_mode: str = "audit"
+    enforcement_mode: Literal["audit", "block"] = "audit"
     is_active: bool = True
 
 
@@ -430,5 +462,6 @@ class PolicyPackRead(PolicyPackCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    version: int
     created_at: datetime
     updated_at: datetime

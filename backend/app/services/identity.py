@@ -42,11 +42,17 @@ def default_permissions_for_role(role: str) -> dict[str, Any]:
     return permissions.get(role, permissions["research_agent"])
 
 
-def permission_denied(identity: AgentIdentity | None, tool_name: str, action: str, resource: str) -> tuple[bool, list[str]]:
+def permission_denied(
+    identity: AgentIdentity | None, tool_name: str, action: str, resource: str
+) -> tuple[bool, list[str]]:
     if identity is None or not identity.active:
         return True, ["Agent has no active identity"]
-    if identity.expires_at and identity.expires_at < datetime.now(timezone.utc):
-        return True, ["Agent identity permissions have expired"]
+    if identity.expires_at:
+        expiry = identity.expires_at
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if expiry < datetime.now(timezone.utc):
+            return True, ["Agent identity permissions have expired"]
 
     permissions = identity.permissions or {}
     deny = [item.lower() for item in permissions.get("deny", [])]
@@ -57,7 +63,12 @@ def permission_denied(identity: AgentIdentity | None, tool_name: str, action: st
     for denied in deny:
         if denied == f"{resource_norm}.{action_norm}" or denied == f"{tool_norm}.{action_norm}":
             return True, [f"Explicit deny matched {denied}"]
-        if denied.split(".")[0] in resource_norm and denied.split(".")[-1] in {action_norm, "read", "write", "execute"}:
+        if denied.split(".")[0] in resource_norm and denied.split(".")[-1] in {
+            action_norm,
+            "read",
+            "write",
+            "execute",
+        }:
             return True, [f"Explicit deny matched sensitive resource rule {denied}"]
 
     allowed_tools = [item.lower() for item in permissions.get("tools", [])]
@@ -69,7 +80,9 @@ def permission_denied(identity: AgentIdentity | None, tool_name: str, action: st
         reasons.append(f"Tool '{tool_name}' is not allowed for role {identity.role}")
     if "*" not in allowed_actions and action_norm not in allowed_actions:
         reasons.append(f"Action '{action}' is not allowed for role {identity.role}")
-    if "*" not in allowed_resources and not any(item in resource_norm for item in allowed_resources):
+    if "*" not in allowed_resources and not any(
+        item in resource_norm for item in allowed_resources
+    ):
         reasons.append(f"Resource '{resource}' is outside role scope {identity.role}")
 
     return bool(reasons), reasons
