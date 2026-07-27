@@ -16,6 +16,8 @@ htmlcov/
 .coverage
 .coverage.*
 *.cover
+coverage.json
+coverage.xml
 
 # --- Environment files (never commit real secrets) ---
 .env
