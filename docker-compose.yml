@@ -107,6 +107,8 @@ services:
       <<: *app-environment
       WORKER_MODE: core
     command: celery -A app.worker.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-core
+    healthcheck:
+      disable: true
     depends_on:
       celery_worker:
         condition: service_healthy
