@@ -1,8 +1,9 @@
-#!/bin/bash
-set -e
+#!/bin/sh
+set -eu
 
-echo "Running database migrations..."
-alembic upgrade head
+if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+    echo "Running database migrations..."
+    alembic upgrade head
+fi
 
-echo "Starting application..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+exec "$@"
