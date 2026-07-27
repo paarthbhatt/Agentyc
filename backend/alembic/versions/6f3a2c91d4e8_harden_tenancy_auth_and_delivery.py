@@ -68,6 +68,14 @@ def _sqlite_unique_name(
     )
 
 
+def _unique_constraint_names(table_name: str, columns: tuple[str, ...]) -> list[str]:
+    return [
+        constraint["name"]
+        for constraint in sa.inspect(op.get_bind()).get_unique_constraints(table_name)
+        if tuple(constraint["column_names"]) == columns and constraint["name"]
+    ]
+
+
 def _alter_table(
     table_name: str,
     *,
@@ -510,11 +518,16 @@ def upgrade() -> None:
             create_uniques=(("uq_api_key_hash", ("key_hash",)),),
         )
     else:
-        op.drop_constraint(
-            "api_keys_key_hash_key",
-            "api_keys",
-            type_="unique",
-        )
+        unique_names = _unique_constraint_names("api_keys", ("key_hash",))
+        legacy_names = [name for name in unique_names if name != "uq_api_key_hash"]
+        for name in legacy_names:
+            op.drop_constraint(name, "api_keys", type_="unique")
+        if "uq_api_key_hash" not in unique_names:
+            op.create_unique_constraint(
+                "uq_api_key_hash",
+                "api_keys",
+                ["key_hash"],
+            )
 
     _alter_table(
         "mcp_assessments",
