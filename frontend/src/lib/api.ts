@@ -129,25 +129,29 @@ export type BehaviorBaseline = {
 export const API_BASE =
   import.meta.env.VITE_API_BASE ?? "http://localhost:8000/api/v1";
 
-async function request<T>(path: string): Promise<T> {
-  const auth = localStorage.getItem('auth');
-  const headers: Record<string, string> = {};
-  
-  if (auth) {
-    try {
-      const parsed = JSON.parse(auth);
-      if (parsed.tokens?.access_token) {
-        headers['Authorization'] = `Bearer ${parsed.tokens.access_token}`;
-      }
-    } catch {
-      // Ignore parse errors
-    }
+let refreshInFlight: Promise<boolean> | null = null;
+
+export function refreshSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+      .then((response) => response.ok)
+      .finally(() => { refreshInFlight = null; });
   }
-  
-  const response = await fetch(`${API_BASE}${path}`, { headers });
+  return refreshInFlight;
+}
+
+async function request<T>(path: string): Promise<T> {
+  let response = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
+  if (response.status === 401 && await refreshSession()) {
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
+  }
   if (!response.ok) {
     if (response.status === 401) {
-      localStorage.removeItem('auth');
       window.location.href = '/';
     }
     throw new Error(`API ${response.status}: ${await response.text()}`);
@@ -171,10 +175,15 @@ export type PolicyPack = {
 export type AuditLog = {
   id: string;
   user_id: string | null;
+  actor_type: string;
+  actor_id: string | null;
   action: string;
   resource_type: string;
   resource_id: string;
   details: Record<string, unknown>;
+  request_id: string | null;
+  previous_hash: string | null;
+  record_hash: string;
   created_at: string;
 };
 

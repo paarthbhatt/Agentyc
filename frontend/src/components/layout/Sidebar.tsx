@@ -1,5 +1,5 @@
 import { useAuth } from "../../context/AuthContext";
-import { useLocation, NavLink } from "react-router-dom";
+import { Link, useLocation } from "wouter";
 
 export type SectionId =
   | "overview"
@@ -69,8 +69,7 @@ function isActive(item: NavItem, pathname: string): boolean {
 
 export default function Sidebar({ incidentCount = 0 }: Props) {
   const { user, org, logout } = useAuth();
-  const location = useLocation();
-  const pathname = location.pathname;
+  const [pathname] = useLocation();
 
   return (
     <aside className="sidebar">
@@ -89,9 +88,9 @@ export default function Sidebar({ incidentCount = 0 }: Props) {
             {group.items.map((item) => {
               const active = isActive(item, pathname);
               return (
-                <NavLink
+                <Link
                   key={item.id}
-                  to={item.href}
+                  href={item.href}
                   className={`nav-item ${active ? "active" : ""}`}
                   style={
                     active
@@ -111,7 +110,7 @@ export default function Sidebar({ incidentCount = 0 }: Props) {
                   {item.id === "incidents" && incidentCount > 0 && (
                     <span className="nav-badge">{incidentCount}</span>
                   )}
-                </NavLink>
+                </Link>
               );
             })}
           </div>

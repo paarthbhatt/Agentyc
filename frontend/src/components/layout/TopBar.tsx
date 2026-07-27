@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "wouter";
 
 export interface Props {
   section?: string;
@@ -35,8 +35,8 @@ function resolveMeta(pathname: string) {
 }
 
 export default function TopBar({ onRefresh }: Props) {
-  const location = useLocation();
-  const meta = resolveMeta(location.pathname);
+  const [pathname] = useLocation();
+  const meta = resolveMeta(pathname);
   const [clock, setClock] = useState("");
 
   useEffect(() => {

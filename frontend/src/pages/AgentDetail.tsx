@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { Link, useParams } from 'wouter';
 import { api } from '../lib/api';
 import type { Agent, BehaviorBaseline, GraphResponse, Incident, TelemetryEvent } from '../lib/api';
 import ForceGraph from '../components/ui/ForceGraph';
@@ -94,7 +94,7 @@ export default function AgentDetail() {
           <div style={{ color: 'var(--red)', fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>
             ⚠ {error ?? 'Agent not found'}
           </div>
-          <Link to="/agents" style={{ color: 'var(--cyan)', fontSize: 12, marginTop: 8, display: 'inline-block' }}>
+          <Link href="/agents" style={{ color: 'var(--cyan)', fontSize: 12, marginTop: 8, display: 'inline-block' }}>
             ← Back to Agents
           </Link>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Route, Switch } from "wouter";
 import {
   Agent,
   api,
@@ -45,36 +45,6 @@ const emptySummary: DashboardSummary = {
   trust_violations: 0,
   identity_violations: 0,
 };
-
-/* ── OAuth callback handler ──────────────────────────────────── */
-function handleOAuthCallback() {
-  const params = new URLSearchParams(window.location.search);
-  const access_token = params.get("access_token");
-  const refresh_token = params.get("refresh_token");
-  if (access_token && refresh_token) {
-    localStorage.setItem(
-      "auth",
-      JSON.stringify({
-        user: {
-          id: "",
-          email: "",
-          is_active: true,
-          created_at: new Date().toISOString(),
-        },
-        org: {
-          id: "",
-          name: "",
-          slug: "",
-          created_at: new Date().toISOString(),
-        },
-        tokens: { access_token, refresh_token },
-      }),
-    );
-    window.history.replaceState({}, "", window.location.pathname);
-    window.location.reload();
-  }
-}
-handleOAuthCallback();
 
 /* ── Auth Screen ─────────────────────────────────────────────── */
 function AuthScreen() {
@@ -134,10 +104,10 @@ function AuthScreen() {
 
 /* ══════════════════════════════════════════════════════════════
    MAIN APPLICATION
-   Drives data loading and React Router paths.
+   Drives data loading and application routes.
    ══════════════════════════════════════════════════════════════ */
 export default function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -217,6 +187,7 @@ export default function App() {
     return () => window.clearInterval(id);
   }, [isAuthenticated()]);
 
+  if (authLoading) return null;
   if (!isAuthenticated()) return <AuthScreen />;
 
   return (
@@ -271,22 +242,22 @@ export default function App() {
             </div>
           )}
           {!loading && (
-            <Routes>
-              <Route path="/" element={<Overview summary={summary} agents={agents} incidents={incidents} events={events} />} />
-              <Route path="/agents" element={<AgentList agents={agents} />} />
-              <Route path="/agents/:id" element={<AgentDetail />} />
-              <Route path="/incidents" element={<Incidents incidents={incidents} />} />
-              <Route path="/replay" element={<Replay incidents={incidents} replay={replay} selectedIncident={incidents[0] ?? null} />} />
-              <Route path="/graph" element={<GraphView graph={graph} />} />
-              <Route path="/memory" element={<Memory events={events} incidents={incidents} />} />
-              <Route path="/tools" element={<ToolTrust tools={tools} />} />
-              <Route path="/policies" element={<Policies />} />
-              <Route path="/threats" element={<ThreatIntelPage threatIntel={threatIntel} />} />
-              <Route path="/mcp" element={<MCPSecurity assessments={mcpAssessments} />} />
-              <Route path="/redteam" element={<RedTeam scenarios={redTeamScenarios} />} />
-              <Route path="/sandbox" element={<Sandbox profiles={sandboxProfiles} />} />
-              <Route path="/audit-logs" element={<AuditLogs auditLogs={auditLogs} />} />
-            </Routes>
+            <Switch>
+              <Route path="/"><Overview summary={summary} agents={agents} incidents={incidents} events={events} /></Route>
+              <Route path="/agents"><AgentList agents={agents} /></Route>
+              <Route path="/agents/:id"><AgentDetail /></Route>
+              <Route path="/incidents"><Incidents incidents={incidents} /></Route>
+              <Route path="/replay"><Replay incidents={incidents} replay={replay} selectedIncident={incidents[0] ?? null} /></Route>
+              <Route path="/graph"><GraphView graph={graph} /></Route>
+              <Route path="/memory"><Memory events={events} incidents={incidents} /></Route>
+              <Route path="/tools"><ToolTrust tools={tools} /></Route>
+              <Route path="/policies"><Policies /></Route>
+              <Route path="/threats"><ThreatIntelPage threatIntel={threatIntel} /></Route>
+              <Route path="/mcp"><MCPSecurity assessments={mcpAssessments} /></Route>
+              <Route path="/redteam"><RedTeam scenarios={redTeamScenarios} /></Route>
+              <Route path="/sandbox"><Sandbox profiles={sandboxProfiles} /></Route>
+              <Route path="/audit-logs"><AuditLogs auditLogs={auditLogs} /></Route>
+            </Switch>
           )}
         </div>
       </div>

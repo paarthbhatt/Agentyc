@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 import ThreatRing from "../components/ui/ThreatRing";
 import type { Agent } from "../lib/api";
 
@@ -143,7 +143,7 @@ export default function Agents({ agents }: Props) {
                       />
                     </div>
                     <Link
-                      to={`/agents/${a.id}`}
+                      href={`/agents/${a.id}`}
                       style={{
                         flex: 1,
                         minWidth: 0,
@@ -208,7 +208,7 @@ export default function Agents({ agents }: Props) {
               return (
                 <Link
                   key={agent.id}
-                  to={`/agents/${agent.id}`}
+                  href={`/agents/${agent.id}`}
                   className={`glass-card glow-${sevClass}`}
                   style={{
                     display: "flex",
