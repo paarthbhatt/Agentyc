@@ -4,7 +4,9 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.services.trace_sanitizer import redact_only, sanitize_payload
 
 Decision = Literal["allow", "block", "challenge", "log_only"]
 Severity = Literal["info", "low", "medium", "high", "critical"]
@@ -205,6 +207,15 @@ class TelemetryEventCreate(BaseModel):
     risk_score: int = Field(default=20, ge=0, le=100)
     client_event_id: str | None = Field(default=None, max_length=120)
 
+    @field_validator("payload", mode="before")
+    @classmethod
+    def _sanitize_payload(cls, value: Any) -> Any:
+        # Runs before Pydantic coerces/recurses the dict, so depth and size
+        # bounds reject hostile input before it can exhaust the stack or memory
+        # (R-002), and secret-shaped values are redacted before storage (R-001).
+        # PayloadBoundsError is a ValueError and surfaces as HTTP 422.
+        return sanitize_payload(value)
+
 
 class TelemetryEventRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -219,6 +230,14 @@ class TelemetryEventRead(BaseModel):
     risk_score: int
     client_event_id: str | None
     occurred_at: datetime
+
+    @field_validator("payload", mode="after")
+    @classmethod
+    def _redact_payload(cls, value: dict[str, Any]) -> dict[str, Any]:
+        # Legacy rows stored before capture-time redaction may still hold
+        # secrets; scrub them on the replay/read path so they never leave the
+        # service in a replay response, stream, or index (R-001).
+        return redact_only(value)
 
 
 class EnforcementRequest(BaseModel):
@@ -266,6 +285,13 @@ class IncidentRead(BaseModel):
     response_actions: list[str]
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("evidence", mode="after")
+    @classmethod
+    def _redact_evidence(cls, value: dict[str, Any]) -> dict[str, Any]:
+        # Incident evidence is replayed on the read path and can embed captured
+        # trace payloads; scrub secret-shaped values before replay (R-001).
+        return redact_only(value)
 
 
 class IncidentUpdate(BaseModel):
