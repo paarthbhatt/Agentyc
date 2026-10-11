@@ -150,6 +150,27 @@ class AgentSentinelClientTests(unittest.TestCase):
                 client_event_id="event-b",
             )
 
+    @patch("agent_sentinel.client.urllib.request.urlopen", return_value=StubResponse({"id": "event"}))
+    def test_record_event_redacts_secrets_before_the_wire(self, urlopen) -> None:
+        self.client.record_event(
+            "tool.call",
+            payload={
+                "api_key": "super-secret-value",
+                "note": "token=abcdef123456 trailing",
+                "nested": {"password": "hunter2", "ok": "keep-me"},
+            },
+        )
+
+        wire = urlopen.call_args.args[0].data.decode("utf-8")
+        self.assertNotIn("super-secret-value", wire)
+        self.assertNotIn("abcdef123456", wire)
+        self.assertNotIn("hunter2", wire)
+        self.assertIn("keep-me", wire)
+        payload = json.loads(wire)["payload"]
+        self.assertEqual(payload["api_key"], "[REDACTED]")
+        self.assertEqual(payload["nested"]["password"], "[REDACTED]")
+        self.assertEqual(payload["nested"]["ok"], "keep-me")
+
 
 if __name__ == "__main__":
     unittest.main()

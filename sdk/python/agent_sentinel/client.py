@@ -7,6 +7,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from agent_sentinel.redaction import redact
+
 
 class AgentSentinelError(RuntimeError):
     pass
@@ -69,7 +71,7 @@ class AgentSentinelClient:
                 "session_id": session_id,
                 "event_type": event_type,
                 "severity": severity,
-                "payload": payload or {},
+                "payload": redact(payload or {}),
                 "trust_score": trust_score,
                 "risk_score": risk_score,
                 "client_event_id": idempotency_key,

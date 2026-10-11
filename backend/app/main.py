@@ -16,6 +16,7 @@ load_dotenv()
 
 import redis.asyncio as redis_async
 from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import select
@@ -49,6 +50,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # The default 422 body echoes the offending request input (and a ctx that may
+    # hold the raw exception). For a telemetry product the input can be a secret,
+    # so strip input/ctx and return only type/loc/msg (R-001). This also avoids
+    # emitting non-serializable exception objects from the payload bounds check.
+    safe = [
+        {"type": err.get("type"), "loc": err.get("loc"), "msg": err.get("msg")}
+        for err in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": safe})
 
 
 @app.middleware("http")
