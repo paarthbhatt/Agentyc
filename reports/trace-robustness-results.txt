@@ -1,0 +1,101 @@
+Agentyc trace-robustness audit — 2026-10-11
+run: /tmp/omnirush/agentyc-audit-venv/bin/python scripts/trace-robustness.py --mutations 2000 --seed 20261011 --fail-on-findings
+run_exit_code: 1
+status: complete
+python: 3.11.16
+dependencies: fastapi=0.140.0, pydantic=2.13.4, sqlalchemy=2.0.51, starlette=1.3.1
+source_sha256: e0775f3bb9ea6ebeaabea3cddf10426007cfd36d7aad367d8cc3e204a5e20691
+seed: 20261011
+cases_requested: 2000
+cases_attempted: 2000
+cases_completed: 2000
+limits: memory=512MiB cpu=30s wall=60s per_case=0.25s
+input_caps: bytes=1048576 depth=1500 nodes=30000
+usage: wall=8.085s cpu=8.023s peak_rss=535740KiB
+observed: max_bytes=524601 max_depth=1102 max_case=63.701ms duplicate_keys=2
+outcomes:
+  capture_or_legacy_storage_ok: 1204
+  json_recursion_error: 28
+  malformed_json_rejected: 575
+  replay_incident_ok: 795
+  replay_session_ok: 1048
+  schema_rejected: 165
+families:
+  corrupt-response-actions: 5
+  corrupt-stored-evidence: 5
+  corrupt-stored-payload: 5
+  deep-nesting: 29
+  duplicate-keys: 1
+  extra-fields: 1
+  huge-strings: 3
+  mutated-byte-insert: 159
+  mutated-duplicate-keys: 145
+  mutated-extra-fields: 135
+  mutated-huge-strings: 137
+  mutated-nonstandard-values: 134
+  mutated-secret-insert: 131
+  mutated-side-effect-arguments: 121
+  mutated-suffix: 163
+  mutated-truncation: 169
+  mutated-unicode-escapes: 128
+  mutated-wide-arrays: 128
+  mutated-wrong-types: 150
+  nonstandard-values: 3
+  secret-in-validation-error: 1
+  secret-payload: 1
+  side-effect-arguments: 1
+  truncated-json: 147
+  truncated-storage: 89
+  unicode-escapes: 1
+  valid: 1
+  wide-arrays: 1
+  wrong-types: 6
+synthetic_secret_disclosures:
+  capture_response: 180
+  capture_stored: 180
+  replay_incident: 238
+  replay_session: 218
+  sdk_wire: 1
+  validation_error_response: 48
+controls:
+  blocked_file_io_attempts: 0
+  blocked_network_attempts: 0
+  blocked_process_attempts: 0
+  blocked_replay_write_attempts: 0
+  bounded_population_rows: 128
+  cross_tenant_incident_status: 404
+  global_settings_database: sqlite://
+  guard_self_check: passed
+  incident_rows_returned: 128
+  other_tenant_session_rows: 0
+  replay_returns_effect_arguments_as_data: True
+  rollback_leftover_telemetry_rows: 0
+  sdk_serialization_preserves_synthetic_secrets: True
+  session_rows_returned: 128
+  target_runtime_executed: True
+target_failures (caught exceptions/HTTP-500 candidates, not process exits):
+  capture_response/UnicodeEncodeError: 19; first=surrogate; artifact=finding-01.json
+    'utf-8' codec can't encode character '\ud800' in position 200: surrogates not allowed
+  capture_response/ValueError: 9; first=depth-256; artifact=finding-02.json
+    Circular reference detected (depth exceeded)
+  capture_validation/UnicodeEncodeError: 1; first=mutation-1004; artifact=finding-10.json
+    'utf-8' codec can't encode character '\ud800' in position 271: surrogates not allowed
+  json_parse/RecursionError: 28; first=depth-1100; artifact=finding-03.json
+    maximum recursion depth exceeded while decoding a JSON object from a unicode string
+  replay_incident/UnicodeEncodeError: 8; first=mutation-301; artifact=finding-08.json
+    'utf-8' codec can't encode character '\ud800' in position 566: surrogates not allowed
+  replay_incident/ValidationError:dict_type: 271; first=stored-payload-null; artifact=finding-04.json
+    1 validation error for TelemetryEventRead payload   Input should be a valid dictionary [type=dict_type, input_value=None, input_type=NoneType]     For further information visit https://errors.pydantic.dev/2.13/v/dict_type
+  replay_incident/ValidationError:list_type: 104; first=actions-null; artifact=finding-06.json
+    1 validation error for IncidentRead response_actions   Input should be a valid list [type=list_type, input_value=None, input_type=NoneType]     For further information visit https://errors.pydantic.dev/2.13/v/list_type
+  replay_incident/ValidationError:string_type: 26; first=actions-nested; artifact=finding-07.json
+    1 validation error for IncidentRead response_actions.0   Input should be a valid string [type=string_type, input_value=['nested'], input_type=list]     For further information visit https://errors.pydantic.dev/2.13/v/string_type
+  replay_session/UnicodeEncodeError: 6; first=mutation-301; artifact=finding-09.json
+    'utf-8' codec can't encode character '\ud800' in position 201: surrogates not allowed
+  replay_session/ValidationError:dict_type: 150; first=stored-payload-null; artifact=finding-05.json
+    1 validation error for list[TelemetryEventRead] 0.payload   Input should be a valid dictionary [type=dict_type, input_value=None, input_type=NoneType]     For further information visit https://errors.pydantic.dev/2.13/v/dict_type
+artifacts: /tmp/omnirush/agentyc-trace-robustness-emcn3yfm
+network_targets: none (SDK urlopen stub; socket/DNS/process traps installed)
+database: fresh sqlite:// in-memory, rollback-only case sessions
+application_startup_workers_live_tools: not invoked
+notes: corpus seeds are included in the case budget; legacy cases model corrupt/older SQL rows
