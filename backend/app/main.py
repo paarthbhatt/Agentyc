@@ -30,6 +30,7 @@ from app.core.config import get_settings
 from app.core.metrics import record_http, render_prometheus
 from app.db.session import SessionLocal
 from app.services.seed import seed_demo_data
+from app.services.trace_sanitizer import safe_validation_errors
 
 settings = get_settings()
 redis_client = redis_async.from_url(settings.redis_url, decode_responses=True)
@@ -59,12 +60,11 @@ async def validation_exception_handler(
     # The default 422 body echoes the offending request input (and a ctx that may
     # hold the raw exception). For a telemetry product the input can be a secret,
     # so strip input/ctx and return only type/loc/msg (R-001). This also avoids
-    # emitting non-serializable exception objects from the payload bounds check.
-    safe = [
-        {"type": err.get("type"), "loc": err.get("loc"), "msg": err.get("msg")}
-        for err in exc.errors()
-    ]
-    return JSONResponse(status_code=422, content={"detail": safe})
+    # recursing a deeply-nested payload during response serialization
+    # (RecursionError -> HTTP 500). Shared with the robustness harness.
+    return JSONResponse(
+        status_code=422, content={"detail": safe_validation_errors(exc.errors())}
+    )
 
 
 @app.middleware("http")

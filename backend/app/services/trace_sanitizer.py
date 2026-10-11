@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 REDACTED = "[REDACTED]"
@@ -52,7 +53,10 @@ _VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"(?i)\b(?:api[_-]?key|token|password|passwd|secret|authorization)\s*[=:]\s*[^\s,;&]+"
     ),
-    re.compile(r"\bsk-[A-Za-z0-9]{8,}"),
+    re.compile(r"\bsk-[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])"),
+    re.compile(r"\bgh[opsur]_[A-Za-z0-9]{20,}"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"),
 )
 
 
@@ -80,10 +84,36 @@ def _is_secret_key(key: str) -> bool:
     return any(hint in low for hint in SECRET_KEY_HINTS)
 
 
+def scrub_surrogates(value: str) -> str:
+    # Unpaired UTF-16 surrogate code points (e.g. "\ud800") cannot be UTF-8
+    # encoded and raise UnicodeEncodeError when a capture or replay response is
+    # serialized to JSON (an HTTP-500 candidate). Replace them with the Unicode
+    # replacement character so storage and replay stay encodable and
+    # deterministic. The common case (no surrogate) returns the input untouched.
+    try:
+        value.encode("utf-8")
+        return value
+    except UnicodeEncodeError:
+        return value.encode("utf-8", "replace").decode("utf-8")
+
+
 def redact_text(value: str) -> str:
     for pattern in _VALUE_PATTERNS:
         value = pattern.sub(REDACTED, value)
-    return value
+    return scrub_surrogates(value)
+
+
+def safe_validation_errors(errors: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    # Pydantic's error list echoes the offending `input` (and a `ctx` that may
+    # hold the raw exception). For a telemetry product that input can be a
+    # secret or a hostile deeply-nested payload, so keep only type/loc/msg
+    # (R-001). Dropping `input` also avoids recursing a 1000-deep payload during
+    # response serialization (RecursionError). Single source of truth shared by
+    # the HTTP exception handler and the robustness harness.
+    return [
+        {"type": err.get("type"), "loc": err.get("loc"), "msg": err.get("msg")}
+        for err in errors
+    ]
 
 
 class _Budget:

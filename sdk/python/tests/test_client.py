@@ -171,6 +171,28 @@ class AgentSentinelClientTests(unittest.TestCase):
         self.assertEqual(payload["nested"]["password"], "[REDACTED]")
         self.assertEqual(payload["nested"]["ok"], "keep-me")
 
+    @patch("agent_sentinel.client.urllib.request.urlopen", return_value=StubResponse({"id": "event"}))
+    def test_record_event_redacts_provider_key_shapes_before_the_wire(self, urlopen) -> None:
+        self.client.record_event(
+            "tool.call",
+            payload={
+                "blobs": [
+                    "openai sk-abcd1234efgh5678ijkl here",
+                    "gh ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 here",
+                    "aws AKIAIOSFODNN7EXAMPLE here",
+                ],
+            },
+        )
+
+        wire = urlopen.call_args.args[0].data.decode("utf-8")
+        for leaked in (
+            "sk-abcd1234efgh5678ijkl",
+            "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "AKIAIOSFODNN7EXAMPLE",
+        ):
+            self.assertNotIn(leaked, wire)
+        self.assertIn("[REDACTED]", wire)
+
 
 if __name__ == "__main__":
     unittest.main()

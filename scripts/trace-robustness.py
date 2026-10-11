@@ -455,17 +455,18 @@ class Runtime:
     def __init__(self, guards: Guards) -> None:
         from datetime import datetime, timezone
 
+        from pydantic import TypeAdapter, ValidationError
+        from sqlalchemy import create_engine, event
+        from sqlalchemy.orm import Session as DBSession
+        from starlette.responses import JSONResponse
+
         from app.api.auth import Principal
         from app.api.routers import incidents, telemetry
         from app.db.session import Base
         from app.db.session import engine as configured_engine
         from app.models import Agent, Incident, Organization, TelemetryEvent, User
         from app.schemas import TelemetryEventCreate, TelemetryEventRead
-        from fastapi.encoders import jsonable_encoder
-        from pydantic import TypeAdapter, ValidationError
-        from sqlalchemy import create_engine, event
-        from sqlalchemy.orm import Session as DBSession
-        from starlette.responses import JSONResponse
+        from app.services.trace_sanitizer import safe_validation_errors
 
         class RollbackSession(DBSession):
             def commit(self) -> None:
@@ -484,7 +485,7 @@ class Runtime:
         self.list_adapter = TypeAdapter(list[TelemetryEventRead])
         self.ValidationError = ValidationError
         self.JSONResponse = JSONResponse
-        self.jsonable_encoder = jsonable_encoder
+        self.safe_validation_errors = safe_validation_errors
         self.guards = guards
         self.now = datetime(2026, 10, 11, tzinfo=timezone.utc)
         self.engine = create_engine("sqlite://")
@@ -664,7 +665,9 @@ def execute_case(runtime: Runtime, guards: Guards, stats: Stats, case: Case, arg
                         observe(
                             stats,
                             "validation_error_response",
-                            runtime.response({"detail": runtime.jsonable_encoder(exc.errors(include_url=False))}),
+                            runtime.response(
+                                {"detail": runtime.safe_validation_errors(exc.errors())}
+                            ),
                         )
                     finally:
                         guards.active = True

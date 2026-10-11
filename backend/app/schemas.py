@@ -231,12 +231,16 @@ class TelemetryEventRead(BaseModel):
     client_event_id: str | None
     occurred_at: datetime
 
-    @field_validator("payload", mode="after")
+    @field_validator("payload", mode="before")
     @classmethod
-    def _redact_payload(cls, value: dict[str, Any]) -> dict[str, Any]:
+    def _redact_payload(cls, value: Any) -> dict[str, Any]:
         # Legacy rows stored before capture-time redaction may still hold
         # secrets; scrub them on the replay/read path so they never leave the
-        # service in a replay response, stream, or index (R-001).
+        # service in a replay response, stream, or index (R-001). A corrupt
+        # legacy row may also hold a non-dict payload (None/str/int); coerce it
+        # to {} so replay returns cleanly instead of crashing with HTTP 500.
+        if not isinstance(value, dict):
+            return {}
         return redact_only(value)
 
 
@@ -286,12 +290,34 @@ class IncidentRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @field_validator("evidence", mode="after")
+    @field_validator("evidence", mode="before")
     @classmethod
-    def _redact_evidence(cls, value: dict[str, Any]) -> dict[str, Any]:
+    def _redact_evidence(cls, value: Any) -> dict[str, Any]:
         # Incident evidence is replayed on the read path and can embed captured
-        # trace payloads; scrub secret-shaped values before replay (R-001).
+        # trace payloads; scrub secret-shaped values before replay (R-001). A
+        # corrupt legacy row may hold a non-dict here; coerce to {} so replay
+        # returns cleanly instead of crashing with HTTP 500.
+        if not isinstance(value, dict):
+            return {}
         return redact_only(value)
+
+    @field_validator("response_actions", mode="before")
+    @classmethod
+    def _coerce_response_actions(cls, value: Any) -> list[str]:
+        # Legacy/corrupt rows may store null, a scalar, a dict, or nested lists
+        # here; coerce to a flat list of strings so replay returns cleanly
+        # rather than failing serialization with HTTP 500. A corrupt value can
+        # also embed secret-shaped data (e.g. {"token": "..."}), so redact by
+        # key/pattern on the structure *before* stringifying — stringifying
+        # first would hide the secret key from the redactor (R-001).
+        value = redact_only(value)
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (list, tuple)):
+            return [v if isinstance(v, str) else str(v) for v in value]
+        return [str(value)]
 
 
 class IncidentUpdate(BaseModel):
